@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Scholar Scraper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4285F4; /* Google Blue */
+            text-align: center;
+        }
+        p {
+            text-align: center;
+            color: #555;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #scholar-url {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        #scrape-btn {
+            padding: 10px 20px;
+            background-color: #34A853; /* Google Green */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #scrape-btn:hover {
+            background-color: #2c8f45;
+        }
+        #loader {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4285F4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .result-item {
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .result-item h3 {
+            margin: 0 0 5px 0;
+            color: #1a0dab;
+        }
+        .result-item .authors {
+            font-size: 0.9em;
+            color: #006621;
+            margin-bottom: 10px;
+        }
+        .result-item .abstract {
+            font-size: 0.95em;
+            color: #545454;
+        }
+        .disclaimer {
+            font-size: 0.8em;
+            text-align: center;
+            color: #777;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Google Scholar Scraper Interaktif</h1>
+        <p>Masukkan link URL hasil pencarian Google Scholar di bawah ini, lalu klik "Ambil Data".</p>
+        
+        <div class="input-group">
+            <input type="text" id="scholar-url" placeholder="https://scholar.google.com/scholar?q=..."/>
+            <button id="scrape-btn">Ambil Data</button>
+        </div>
+
+        <div id="loader">
+            <div class="spinner"></div>
+            <p>Sedang mengambil data...</p>
+        </div>
+
+        <div id="results-container"></div>
+        
+        <p class="disclaimer">
+            <b>Disclaimer:</b> Alat ini menggunakan proxy publik untuk mengambil data dan tidak berafiliasi dengan Google. Harap gunakan secara bertanggung jawab.
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('scrape-btn').addEventListener('click', async () => {
+            const urlInput = document.getElementById('scholar-url');
+            const resultsContainer = document.getElementById('results-container');
+            const loader = document.getElementById('loader');
+            
+            const scholarUrl = urlInput.value.trim();
+
+            if (!scholarUrl || !scholarUrl.startsWith('https://scholar.google.com')) {
+                alert('Harap masukkan URL Google Scholar yang valid.');
+                return;
+            }
+
+            // Tampilkan loader dan bersihkan hasil sebelumnya
+            loader.style.display = 'block';
+            resultsContainer.innerHTML = '';
+
+            // Kita menggunakan proxy 'allorigins' untuk melewati batasan CORS browser
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(scholarUrl)}`;
+
+            try {
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const htmlContent = data.contents;
+                
+                // Gunakan DOMParser untuk mengubah teks HTML menjadi dokumen yang bisa kita proses
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlContent, 'text/html');
+
+                const searchResults = doc.querySelectorAll('div.gs_ri');
+
+                if (searchResults.length === 0) {
+                    resultsContainer.innerHTML = '<p>Tidak ada hasil yang ditemukan. Google mungkin memblokir permintaan ini. Coba lagi nanti atau dengan koneksi internet yang berbeda.</p>';
+                }
+
+                searchResults.forEach(item => {
+                    const titleElement = item.querySelector('h3.gs_rt a');
+                    const title = titleElement ? titleElement.innerText : 'Judul tidak ditemukan';
+                    
+                    const authorsElement = item.querySelector('div.gs_a');
+                    const authors = authorsElement ? authorsElement.innerText : 'Penulis tidak ditemukan';
+
+                    const abstractElement = item.querySelector('div.gs_rs');
+                    // Menghilangkan enter dan spasi berlebih
+                    const abstract = abstractElement ? abstractElement.innerText.replace(/\n/g, ' ').trim() : 'Abstrak tidak tersedia.';
+
+                    const resultHTML = `
+                        <div class="result-item">
+                            <h3>${title}</h3>
+                            <div class="authors">${authors}</div>
+                            <div class="abstract">${abstract}</div>
+                        </div>
+                    `;
+                    resultsContainer.innerHTML += resultHTML;
+                });
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultsContainer.innerHTML = '<p style="color: red;">Terjadi kesalahan saat mengambil data. Periksa konsol browser untuk detailnya.</p>';
+            } finally {
+                // Sembunyikan loader setelah selesai
+                loader.style.display = 'none';
+            }
+        });
+    </script>
+
+</body>
+</html>
